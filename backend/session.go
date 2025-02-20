@@ -1,6 +1,10 @@
 package main
 
-import "github.com/gorilla/websocket"
+import (
+	"time"
+
+	"github.com/gorilla/websocket"
+)
 
 type Player struct {
 	id        string
@@ -10,11 +14,18 @@ type Player struct {
 }
 
 type GameState struct {
-	puckX float64
-	puckY float64
+	puckX  float64
+	puckY  float64
 	puckVX float64
 	puckVY float64
 
 	playerA *Player
 	playerB *Player
+}
+
+type GameSession struct {
+	id     string
+	state  *GameState
+	ticker *time.Ticker
+	doneCh chan bool
 }
