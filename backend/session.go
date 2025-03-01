@@ -132,3 +132,12 @@ func (gs *GameSession) HandlePlayerInput(playerId string, msg []byte) {
 		}
 	}
 }
+
+func (gs *GameSession) RemovePlayer(playerID string) {
+	if gs.state.playerA != nil && gs.state.playerA.id == playerID {
+		gs.state.playerA = nil
+	}
+	if gs.state.playerB != nil && gs.state.playerB.id == playerID {
+		gs.state.playerB = nil
+	}
+}
