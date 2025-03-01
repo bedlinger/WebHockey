@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>WebHockey</title>
+  <style>
+    canvas {
+      border: 1px solid black;
+      background: #fff;
+    }
+
+    #gameControls {
+      margin: 20px 0;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="gameControls">
+    <button onclick="createGame()">Create New Game</button>
+    <input type="text" id="sessionId" placeholder="Session ID">
+    <button onclick="joinGame()">Join Game</button>
+  </div>
+  <canvas id="gameCanvas" width="800" height="400"></canvas>
+
+  <script>
+    let ws;
+    let canvas = document.getElementById('gameCanvas');
+    let ctx = canvas.getContext('2d');
+    let mouseX = 0;
+    let mouseY = 0;
+
+    async function createGame() {
+      const response = await fetch('/create', { method: 'POST' });
+      const data = await response.json();
+      document.getElementById('sessionId').value = data.sessionID;
+      connectWebSocket(data.sessionID);
+    }
+
+    function joinGame() {
+      const sessionId = document.getElementById('sessionId').value;
+      connectWebSocket(sessionId);
+    }
+
+    function connectWebSocket(sessionId) {
+      ws = new WebSocket(`ws://${window.location.host}/play/${sessionId}`);
+
+      ws.onmessage = function (event) {
+        const state = JSON.parse(event.data);
+        if (state.type === 'state_update') {
+          drawGame(state);
+        }
+      };
+
+      canvas.addEventListener('mousemove', function (event) {
+        const rect = canvas.getBoundingClientRect();
+        mouseX = event.clientX - rect.left;
+        mouseY = event.clientY - rect.top;
+
+        ws.send(JSON.stringify({
+          type: 'player_move',
+          x: mouseX,
+          y: mouseY
+        }));
+      });
+    }
+
+    function drawGame(state) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw goals
+      ctx.fillStyle = '#eee';
+      // Left goal
+      ctx.fillRect(0, (state.fieldHeight - state.goalHeight) / 2, state.goalWidth, state.goalHeight);
+      // Right goal
+      ctx.fillRect(state.fieldWidth - state.goalWidth, (state.fieldHeight - state.goalHeight) / 2, state.goalWidth, state.goalHeight);
+
+      // Draw players
+      ctx.fillStyle = 'blue';
+      ctx.beginPath();
+      ctx.arc(state.playerAX, state.playerAY, 20, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = 'red';
+      ctx.beginPath();
+      ctx.arc(state.playerBX, state.playerBY, 20, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Draw puck
+      ctx.fillStyle = 'black';
+      ctx.beginPath();
+      ctx.arc(state.puckX, state.puckY, 10, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Draw score
+      ctx.fillStyle = 'black';
+      ctx.font = '24px Arial';
+      ctx.fillText(`${state.scoreA} - ${state.scoreB}`, state.fieldWidth / 2 - 30, 30);
+    }
+  </script>
+</body>
+
+</html>

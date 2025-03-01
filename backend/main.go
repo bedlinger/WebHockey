@@ -16,6 +16,9 @@ var manager = NewSessionManager()
 func main() {
 	r := mux.NewRouter()
 
+	// Add this line to serve static files
+	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+
 	r.HandleFunc("/create", handleCreateSession).Methods("POST")
 	r.HandleFunc("/play/{sessionID}", handlePlay)
 
