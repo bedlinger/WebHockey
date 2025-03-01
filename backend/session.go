@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -16,10 +17,18 @@ type Player struct {
 }
 
 type GameState struct {
+	fieldWidth  float64
+	fieldHeight float64
+	goalWidth   float64
+	goalHeight  float64
+
 	puckX  float64
 	puckY  float64
 	puckVX float64
 	puckVY float64
+
+	scoreA int
+	scoreB int
 
 	playerA *Player
 	playerB *Player
@@ -36,10 +45,16 @@ func NewGameSession(id string) *GameSession {
 	return &GameSession{
 		id: id,
 		state: &GameState{
-			puckX:  0,
-			puckY:  0,
-			puckVX: 1,
-			puckVY: 1,
+			fieldWidth:  800, // pixels
+			fieldHeight: 400, // pixels
+			goalWidth:   60,  // pixels
+			goalHeight:  120, // pixels
+			puckX:       400,
+			puckY:       200,
+			puckVX:      5,
+			puckVY:      5,
+			scoreA:      0,
+			scoreB:      0,
 		},
 		ticker: time.NewTicker(16 * time.Millisecond),
 		doneCh: make(chan bool),
@@ -66,13 +81,40 @@ func (gs *GameSession) Update() {
 	gs.state.puckX += gs.state.puckVX
 	gs.state.puckY += gs.state.puckVY
 
-	if gs.state.puckX > 100 || gs.state.puckX < -100 {
-		gs.state.puckVX = -gs.state.puckVX
+	// Check for goals
+	if gs.state.puckY >= (gs.state.fieldHeight-gs.state.goalHeight)/2 &&
+		gs.state.puckY <= (gs.state.fieldHeight+gs.state.goalHeight)/2 {
+		// Goal for player B
+		if gs.state.puckX <= 0 {
+			gs.state.scoreB++
+			gs.resetPuck()
+		}
+		// Goal for player A
+		if gs.state.puckX >= gs.state.fieldWidth {
+			gs.state.scoreA++
+			gs.resetPuck()
+		}
 	}
 
-	if gs.state.puckY > 100 || gs.state.puckY < -100 {
+	// Bounce off top and bottom walls
+	if gs.state.puckY > gs.state.fieldHeight || gs.state.puckY < 0 {
 		gs.state.puckVY = -gs.state.puckVY
 	}
+
+	// Bounce off side walls (only if not in goal area)
+	if gs.state.puckY < (gs.state.fieldHeight-gs.state.goalHeight)/2 ||
+		gs.state.puckY > (gs.state.fieldHeight+gs.state.goalHeight)/2 {
+		if gs.state.puckX > gs.state.fieldWidth || gs.state.puckX < 0 {
+			gs.state.puckVX = -gs.state.puckVX
+		}
+	}
+}
+
+func (gs *GameSession) resetPuck() {
+	gs.state.puckX = gs.state.fieldWidth / 2
+	gs.state.puckY = gs.state.fieldHeight / 2
+	gs.state.puckVX = 5 * float64(1-2*rand.Intn(2)) // Random direction
+	gs.state.puckVY = 5 * float64(1-2*rand.Intn(2)) // Random direction
 }
 
 func (gs *GameSession) BroadcastState() {
@@ -81,21 +123,33 @@ func (gs *GameSession) BroadcastState() {
 	}
 
 	msg := struct {
-		MsgType  string  `json:"type"`
-		PuckX    float64 `json:"puckX"`
-		PuckY    float64 `json:"puckY"`
-		PlayerAX float64 `json:"playerAX"`
-		PlayerAY float64 `json:"playerAY"`
-		PlayerBX float64 `json:"playerBX"`
-		PlayerBY float64 `json:"playerBY"`
+		MsgType     string  `json:"type"`
+		FieldWidth  float64 `json:"fieldWidth"`
+		FieldHeight float64 `json:"fieldHeight"`
+		GoalWidth   float64 `json:"goalWidth"`
+		GoalHeight  float64 `json:"goalHeight"`
+		PuckX       float64 `json:"puckX"`
+		PuckY       float64 `json:"puckY"`
+		PlayerAX    float64 `json:"playerAX"`
+		PlayerAY    float64 `json:"playerAY"`
+		PlayerBX    float64 `json:"playerBX"`
+		PlayerBY    float64 `json:"playerBY"`
+		ScoreA      int     `json:"scoreA"`
+		ScoreB      int     `json:"scoreB"`
 	}{
-		MsgType:  "state_update",
-		PuckX:    gs.state.puckX,
-		PuckY:    gs.state.puckY,
-		PlayerAX: gs.state.playerA.positionX,
-		PlayerAY: gs.state.playerA.positionY,
-		PlayerBX: gs.state.playerB.positionX,
-		PlayerBY: gs.state.playerB.positionY,
+		MsgType:     "state_update",
+		FieldWidth:  gs.state.fieldWidth,
+		FieldHeight: gs.state.fieldHeight,
+		GoalWidth:   gs.state.goalWidth,
+		GoalHeight:  gs.state.goalHeight,
+		PuckX:       gs.state.puckX,
+		PuckY:       gs.state.puckY,
+		PlayerAX:    gs.state.playerA.positionX,
+		PlayerAY:    gs.state.playerA.positionY,
+		PlayerBX:    gs.state.playerB.positionX,
+		PlayerBY:    gs.state.playerB.positionY,
+		ScoreA:      gs.state.scoreA,
+		ScoreB:      gs.state.scoreB,
 	}
 
 	data, err := json.Marshal(msg)
