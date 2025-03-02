@@ -80,7 +80,6 @@ func (s *Session) Start() {
 	}()
 }
 
-// Methods renamed to be private since they're internal
 func (s *Session) update() {
 	s.state.PuckX += s.state.VelX
 	s.state.PuckY += s.state.VelY
