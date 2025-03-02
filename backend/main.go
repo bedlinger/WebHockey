@@ -11,22 +11,22 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-var manager = NewSessionManager()
+var manager = NewManager()
 
 func main() {
 	r := mux.NewRouter()
 
 	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 
-	r.HandleFunc("/create", handleCreateSession).Methods("POST")
+	r.HandleFunc("/create", handleCreate).Methods("POST")
 	r.HandleFunc("/play/{sessionID}", handlePlay)
 
 	fmt.Println("Server running on :8080 ...")
 	log.Fatal(http.ListenAndServe(":8080", r))
 }
 
-func handleCreateSession(w http.ResponseWriter, r *http.Request) {
-	sessionID := manager.CreateSession()
+func handleCreate(w http.ResponseWriter, r *http.Request) {
+	sessionID := manager.Create()
 
 	response := map[string]string{
 		"sessionID": sessionID,
@@ -45,7 +45,7 @@ func handlePlay(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	sessionID := vars["sessionID"]
 
-	session, ok := manager.GetSession(sessionID)
+	session, ok := manager.Get(sessionID)
 	if !ok {
 		http.Error(w, "Session not found", http.StatusNotFound)
 		return
@@ -59,14 +59,14 @@ func handlePlay(w http.ResponseWriter, r *http.Request) {
 
 	playerID := uuid.NewString()
 	player := &Player{
-		id:   playerID,
-		conn: conn,
+		ID:   playerID,
+		Conn: conn,
 	}
 
-	if session.state.playerA == nil {
-		session.state.playerA = player
-	} else if session.state.playerB == nil {
-		session.state.playerB = player
+	if session.state.PlayerA == nil {
+		session.state.PlayerA = player
+	} else if session.state.PlayerB == nil {
+		session.state.PlayerB = player
 	} else {
 		http.Error(w, "Session full", http.StatusConflict)
 		conn.Close()
@@ -78,19 +78,19 @@ func handlePlay(w http.ResponseWriter, r *http.Request) {
 	go listenToPlayer(session, player)
 }
 
-func listenToPlayer(session *GameSession, player *Player) {
-	defer player.conn.Close()
+func listenToPlayer(s *Session, p *Player) {
+	defer p.Conn.Close()
 
 	for {
-		msgType, msg, err := player.conn.ReadMessage()
+		msgType, msg, err := p.Conn.ReadMessage()
 		if err != nil {
-			log.Printf("Error while reading player %s: %v\n", player.id, err)
-			session.RemovePlayer(player.id)
+			log.Printf("Error while reading player %s: %v\n", p.ID, err)
+			s.RemovePlayer(p.ID)
 			return
 		}
 
 		if msgType == websocket.TextMessage {
-			session.HandlePlayerInput(player.id, msg)
+			s.HandleInput(p.ID, msg)
 		}
 	}
 }

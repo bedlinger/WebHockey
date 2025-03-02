@@ -10,117 +10,120 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+// Player represents a connected client
 type Player struct {
-	id        string
-	conn      *websocket.Conn
-	positionX float64
-	positionY float64
+	ID   string
+	Conn *websocket.Conn
+	PosX float64
+	PosY float64
 }
 
-type GameState struct {
-	fieldWidth  float64
-	fieldHeight float64
-	goalWidth   float64
-	goalHeight  float64
+// State contains the current game state
+type State struct {
+	Width      float64
+	Height     float64
+	GoalWidth  float64
+	GoalHeight float64
 
-	puckX  float64
-	puckY  float64
-	puckVX float64
-	puckVY float64
+	PuckX float64
+	PuckY float64
+	VelX  float64
+	VelY  float64
 
-	scoreA int
-	scoreB int
+	ScoreA int
+	ScoreB int
 
-	playerA *Player
-	playerB *Player
+	PlayerA *Player
+	PlayerB *Player
 }
 
-type GameSession struct {
-	id     string
-	state  *GameState
+// Session manages a single game instance
+type Session struct {
+	ID     string
+	state  *State
 	ticker *time.Ticker
-	doneCh chan bool
+	done   chan bool
 }
 
-func NewGameSession(id string) *GameSession {
-	return &GameSession{
-		id: id,
-		state: &GameState{
-			fieldWidth:  800, // pixels
-			fieldHeight: 400, // pixels
-			goalWidth:   60,  // pixels
-			goalHeight:  120, // pixels
-			puckX:       400,
-			puckY:       200,
-			puckVX:      5,
-			puckVY:      5,
-			scoreA:      0,
-			scoreB:      0,
+func NewSession(id string) *Session {
+	return &Session{
+		ID: id,
+		state: &State{
+			Width:      800,
+			Height:     400,
+			GoalWidth:  60,
+			GoalHeight: 120,
+			PuckX:      400,
+			PuckY:      200,
+			VelX:       5,
+			VelY:       5,
 		},
 		ticker: time.NewTicker(16 * time.Millisecond),
-		doneCh: make(chan bool),
+		done:   make(chan bool),
 	}
 }
 
-func (gs *GameSession) Start() {
+// Start begins the game loop
+func (s *Session) Start() {
 	go func() {
 		for {
 			select {
-			case <-gs.doneCh:
-				gs.ticker.Stop()
-				fmt.Printf("Game session stopped: %s", gs.id)
+			case <-s.done:
+				s.ticker.Stop()
+				fmt.Printf("Game session stopped: %s", s.ID)
 				return
-			case <-gs.ticker.C:
-				gs.Update()
-				gs.BroadcastState()
+			case <-s.ticker.C:
+				s.update()
+				s.broadcast()
 			}
 		}
 	}()
 }
 
-func (gs *GameSession) Update() {
-	gs.state.puckX += gs.state.puckVX
-	gs.state.puckY += gs.state.puckVY
+// Methods renamed to be private since they're internal
+func (s *Session) update() {
+	s.state.PuckX += s.state.VelX
+	s.state.PuckY += s.state.VelY
 
-	if gs.state.playerA != nil {
-		gs.handlePlayerPuckCollision(gs.state.playerA)
+	if s.state.PlayerA != nil {
+		s.handlePlayerPuckCollision(s.state.PlayerA)
 	}
-	if gs.state.playerB != nil {
-		gs.handlePlayerPuckCollision(gs.state.playerB)
+	if s.state.PlayerB != nil {
+		s.handlePlayerPuckCollision(s.state.PlayerB)
 	}
 
 	// Check for goals
-	if gs.state.puckY >= (gs.state.fieldHeight-gs.state.goalHeight)/2 &&
-		gs.state.puckY <= (gs.state.fieldHeight+gs.state.goalHeight)/2 {
+	if s.state.PuckY >= (s.state.Height-s.state.GoalHeight)/2 &&
+		s.state.PuckY <= (s.state.Height+s.state.GoalHeight)/2 {
 		// Goal for player B
-		if gs.state.puckX <= 0 {
-			gs.state.scoreB++
-			gs.resetPuck()
+		if s.state.PuckX <= 0 {
+			s.state.ScoreB++
+			s.resetPuck()
 		}
 		// Goal for player A
-		if gs.state.puckX >= gs.state.fieldWidth {
-			gs.state.scoreA++
-			gs.resetPuck()
+		if s.state.PuckX >= s.state.Width {
+			s.state.ScoreA++
+			s.resetPuck()
 		}
 	}
 
 	// Bounce off top and bottom walls
-	if gs.state.puckY > gs.state.fieldHeight || gs.state.puckY < 0 {
-		gs.state.puckVY = -gs.state.puckVY
+	if s.state.PuckY > s.state.Height || s.state.PuckY < 0 {
+		s.state.VelY = -s.state.VelY
 	}
 
 	// Bounce off side walls (only if not in goal area)
-	if gs.state.puckY < (gs.state.fieldHeight-gs.state.goalHeight)/2 ||
-		gs.state.puckY > (gs.state.fieldHeight+gs.state.goalHeight)/2 {
-		if gs.state.puckX > gs.state.fieldWidth || gs.state.puckX < 0 {
-			gs.state.puckVX = -gs.state.puckVX
+	if s.state.PuckY < (s.state.Height-s.state.GoalHeight)/2 ||
+		s.state.PuckY > (s.state.Height+s.state.GoalHeight)/2 {
+		if s.state.PuckX > s.state.Width || s.state.PuckX < 0 {
+			s.state.VelX = -s.state.VelX
 		}
 	}
 }
 
-func (gs *GameSession) handlePlayerPuckCollision(player *Player) {
-	dx := gs.state.puckX - player.positionX
-	dy := gs.state.puckY - player.positionY
+func (s *Session) handlePlayerPuckCollision(player *Player) {
+	dx := s.state.PuckX - player.PosX
+	dy := s.state.PuckY - player.PosY
 	distance := math.Sqrt(dx*dx + dy*dy)
 
 	if distance < 30 { // 20 + 10 = combined radii
@@ -128,32 +131,32 @@ func (gs *GameSession) handlePlayerPuckCollision(player *Player) {
 		nx := dx / distance
 		ny := dy / distance
 
-		gs.state.puckX = player.positionX + (30 * nx)
-		gs.state.puckY = player.positionY + (30 * ny)
+		s.state.PuckX = player.PosX + (30 * nx)
+		s.state.PuckY = player.PosY + (30 * ny)
 
 		speedFactor := 10.0 // Adjust this value to control bounce strength
-		gs.state.puckVX = nx * speedFactor
-		gs.state.puckVY = ny * speedFactor
+		s.state.VelX = nx * speedFactor
+		s.state.VelY = ny * speedFactor
 
 		maxSpeed := 15.0 // Adjust this value to control maximum puck speed
-		currentSpeed := math.Sqrt(gs.state.puckVX*gs.state.puckVX + gs.state.puckVY*gs.state.puckVY)
+		currentSpeed := math.Sqrt(s.state.VelX*s.state.VelX + s.state.VelY*s.state.VelY)
 		if currentSpeed > maxSpeed {
 			ratio := maxSpeed / currentSpeed
-			gs.state.puckVX *= ratio
-			gs.state.puckVY *= ratio
+			s.state.VelX *= ratio
+			s.state.VelY *= ratio
 		}
 	}
 }
 
-func (gs *GameSession) resetPuck() {
-	gs.state.puckX = gs.state.fieldWidth / 2
-	gs.state.puckY = gs.state.fieldHeight / 2
-	gs.state.puckVX = 5 * float64(1-2*rand.Intn(2)) // Random direction
-	gs.state.puckVY = 5 * float64(1-2*rand.Intn(2)) // Random direction
+func (s *Session) resetPuck() {
+	s.state.PuckX = s.state.Width / 2
+	s.state.PuckY = s.state.Height / 2
+	s.state.VelX = 5 * float64(1-2*rand.Intn(2)) // Random direction
+	s.state.VelY = 5 * float64(1-2*rand.Intn(2)) // Random direction
 }
 
-func (gs *GameSession) BroadcastState() {
-	if gs.state.playerA == nil || gs.state.playerB == nil {
+func (s *Session) broadcast() {
+	if s.state.PlayerA == nil || s.state.PlayerB == nil {
 		return
 	}
 
@@ -173,18 +176,18 @@ func (gs *GameSession) BroadcastState() {
 		ScoreB      int     `json:"scoreB"`
 	}{
 		MsgType:     "state_update",
-		FieldWidth:  gs.state.fieldWidth,
-		FieldHeight: gs.state.fieldHeight,
-		GoalWidth:   gs.state.goalWidth,
-		GoalHeight:  gs.state.goalHeight,
-		PuckX:       gs.state.puckX,
-		PuckY:       gs.state.puckY,
-		PlayerAX:    gs.state.playerA.positionX,
-		PlayerAY:    gs.state.playerA.positionY,
-		PlayerBX:    gs.state.playerB.positionX,
-		PlayerBY:    gs.state.playerB.positionY,
-		ScoreA:      gs.state.scoreA,
-		ScoreB:      gs.state.scoreB,
+		FieldWidth:  s.state.Width,
+		FieldHeight: s.state.Height,
+		GoalWidth:   s.state.GoalWidth,
+		GoalHeight:  s.state.GoalHeight,
+		PuckX:       s.state.PuckX,
+		PuckY:       s.state.PuckY,
+		PlayerAX:    s.state.PlayerA.PosX,
+		PlayerAY:    s.state.PlayerA.PosY,
+		PlayerBX:    s.state.PlayerB.PosX,
+		PlayerBY:    s.state.PlayerB.PosY,
+		ScoreA:      s.state.ScoreA,
+		ScoreB:      s.state.ScoreB,
 	}
 
 	data, err := json.Marshal(msg)
@@ -193,11 +196,11 @@ func (gs *GameSession) BroadcastState() {
 		return
 	}
 
-	_ = gs.state.playerA.conn.WriteMessage(websocket.TextMessage, data)
-	_ = gs.state.playerB.conn.WriteMessage(websocket.TextMessage, data)
+	_ = s.state.PlayerA.Conn.WriteMessage(websocket.TextMessage, data)
+	_ = s.state.PlayerB.Conn.WriteMessage(websocket.TextMessage, data)
 }
 
-func (gs *GameSession) HandlePlayerInput(playerId string, msg []byte) {
+func (s *Session) HandleInput(playerID string, msg []byte) {
 	var input struct {
 		MsgType string  `json:"type"`
 		X       float64 `json:"x"`
@@ -211,22 +214,22 @@ func (gs *GameSession) HandlePlayerInput(playerId string, msg []byte) {
 	}
 
 	if input.MsgType == "player_move" {
-		switch playerId {
-		case gs.state.playerA.id:
-			gs.state.playerA.positionX = input.X
-			gs.state.playerA.positionY = input.Y
-		case gs.state.playerB.id:
-			gs.state.playerB.positionX = input.X
-			gs.state.playerB.positionY = input.Y
+		switch playerID {
+		case s.state.PlayerA.ID:
+			s.state.PlayerA.PosX = input.X
+			s.state.PlayerA.PosY = input.Y
+		case s.state.PlayerB.ID:
+			s.state.PlayerB.PosX = input.X
+			s.state.PlayerB.PosY = input.Y
 		}
 	}
 }
 
-func (gs *GameSession) RemovePlayer(playerID string) {
-	if gs.state.playerA != nil && gs.state.playerA.id == playerID {
-		gs.state.playerA = nil
+func (s *Session) RemovePlayer(playerID string) {
+	if s.state.PlayerA != nil && s.state.PlayerA.ID == playerID {
+		s.state.PlayerA = nil
 	}
-	if gs.state.playerB != nil && gs.state.playerB.id == playerID {
-		gs.state.playerB = nil
+	if s.state.PlayerB != nil && s.state.PlayerB.ID == playerID {
+		s.state.PlayerB = nil
 	}
 }

@@ -6,44 +6,47 @@ import (
 	"github.com/google/uuid"
 )
 
-type SessionManager struct {
-	sessions map[string]*GameSession
+// Manager handles game session lifecycle and storage
+type Manager struct {
+	sessions map[string]*Session
 	mu       sync.Mutex
 }
 
-func NewSessionManager() *SessionManager {
-	return &SessionManager{
-		sessions: make(map[string]*GameSession),
+func NewManager() *Manager {
+	return &Manager{
+		sessions: make(map[string]*Session),
 	}
 }
 
-func (sm *SessionManager) CreateSession() string {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
+// Create initializes a new game session and returns its ID
+func (m *Manager) Create() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	id := uuid.NewString()
-	session := NewGameSession(id)
-	sm.sessions[id] = session
+	session := NewSession(id)
+	m.sessions[id] = session
 
 	session.Start()
-
 	return id
 }
 
-func (sm *SessionManager) GetSession(id string) (*GameSession, bool) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
+// Get returns a session by ID if it exists
+func (m *Manager) Get(id string) (*Session, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	session, ok := sm.sessions[id]
+	session, ok := m.sessions[id]
 	return session, ok
 }
 
-func (sm *SessionManager) RemoveSession(id string) {
-	sm.mu.Lock()
-	defer sm.mu.Unlock()
+// Remove terminates and removes a session
+func (m *Manager) Remove(id string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	if session, ok := sm.sessions[id]; ok {
-		session.doneCh <- true
-		delete(sm.sessions, id)
+	if session, ok := m.sessions[id]; ok {
+		session.done <- true
+		delete(m.sessions, id)
 	}
 }
