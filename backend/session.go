@@ -118,6 +118,11 @@ func (s *Session) update() {
 			s.state.VelX = -s.state.VelX
 		}
 	}
+
+	// check if the game is over
+	if s.state.ScoreA == 5 || s.state.ScoreB == 5 {
+		s.done <- true
+	}
 }
 
 func (s *Session) handlePlayerPuckCollision(player *Player) {
