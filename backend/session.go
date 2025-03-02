@@ -236,4 +236,27 @@ func (s *Session) RemovePlayer(playerID string) {
 	if s.state.PlayerB != nil && s.state.PlayerB.ID == playerID {
 		s.state.PlayerB = nil
 	}
+
+	// Check if both players are gone
+	if s.state.PlayerA == nil && s.state.PlayerB == nil {
+		s.done <- true
+		return
+	}
+
+	// Notify remaining player
+	msg := struct {
+		MsgType string `json:"type"`
+		Message string `json:"message"`
+	}{
+		MsgType: "player_left",
+		Message: "Other player has left the game",
+	}
+
+	data, _ := json.Marshal(msg)
+	if s.state.PlayerA != nil {
+		s.state.PlayerA.Conn.WriteMessage(websocket.TextMessage, data)
+	}
+	if s.state.PlayerB != nil {
+		s.state.PlayerB.Conn.WriteMessage(websocket.TextMessage, data)
+	}
 }

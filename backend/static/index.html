@@ -20,6 +20,7 @@
     <button onclick="createGame()">Create New Game</button>
     <input type="text" id="sessionId" placeholder="Session ID">
     <button onclick="joinGame()">Join Game</button>
+    <button onclick="leaveGame()" id="leaveButton" style="display: none;">Leave Game</button>
   </div>
   <canvas id="gameCanvas" width="800" height="400"></canvas>
 
@@ -44,11 +45,15 @@
 
     function connectWebSocket(sessionId) {
       ws = new WebSocket(`ws://${window.location.host}/play/${sessionId}`);
+      document.getElementById('leaveButton').style.display = 'inline';
 
       ws.onmessage = function (event) {
         const state = JSON.parse(event.data);
         if (state.type === 'state_update') {
           drawGame(state);
+        } else if (state.type === 'player_left') {
+          alert(state.message);
+          leaveGame();
         }
       };
 
@@ -63,6 +68,15 @@
           y: mouseY
         }));
       });
+    }
+
+    function leaveGame() {
+      if (ws) {
+        ws.close();
+        ws = null;
+      }
+      document.getElementById('leaveButton').style.display = 'none';
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
 
     function drawGame(state) {
