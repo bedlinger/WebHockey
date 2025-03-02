@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/rand"
 	"time"
 
@@ -81,6 +82,13 @@ func (gs *GameSession) Update() {
 	gs.state.puckX += gs.state.puckVX
 	gs.state.puckY += gs.state.puckVY
 
+	if gs.state.playerA != nil {
+		gs.handlePlayerPuckCollision(gs.state.playerA)
+	}
+	if gs.state.playerB != nil {
+		gs.handlePlayerPuckCollision(gs.state.playerB)
+	}
+
 	// Check for goals
 	if gs.state.puckY >= (gs.state.fieldHeight-gs.state.goalHeight)/2 &&
 		gs.state.puckY <= (gs.state.fieldHeight+gs.state.goalHeight)/2 {
@@ -106,6 +114,33 @@ func (gs *GameSession) Update() {
 		gs.state.puckY > (gs.state.fieldHeight+gs.state.goalHeight)/2 {
 		if gs.state.puckX > gs.state.fieldWidth || gs.state.puckX < 0 {
 			gs.state.puckVX = -gs.state.puckVX
+		}
+	}
+}
+
+func (gs *GameSession) handlePlayerPuckCollision(player *Player) {
+	dx := gs.state.puckX - player.positionX
+	dy := gs.state.puckY - player.positionY
+	distance := math.Sqrt(dx*dx + dy*dy)
+
+	if distance < 30 { // 20 + 10 = combined radii
+		// Normalize collision vector
+		nx := dx / distance
+		ny := dy / distance
+
+		gs.state.puckX = player.positionX + (30 * nx)
+		gs.state.puckY = player.positionY + (30 * ny)
+
+		speedFactor := 10.0 // Adjust this value to control bounce strength
+		gs.state.puckVX = nx * speedFactor
+		gs.state.puckVY = ny * speedFactor
+
+		maxSpeed := 15.0 // Adjust this value to control maximum puck speed
+		currentSpeed := math.Sqrt(gs.state.puckVX*gs.state.puckVX + gs.state.puckVY*gs.state.puckVY)
+		if currentSpeed > maxSpeed {
+			ratio := maxSpeed / currentSpeed
+			gs.state.puckVX *= ratio
+			gs.state.puckVY *= ratio
 		}
 	}
 }

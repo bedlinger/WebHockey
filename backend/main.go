@@ -16,7 +16,6 @@ var manager = NewSessionManager()
 func main() {
 	r := mux.NewRouter()
 
-	// Add this line to serve static files
 	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 
 	r.HandleFunc("/create", handleCreateSession).Methods("POST")
@@ -85,8 +84,7 @@ func listenToPlayer(session *GameSession, player *Player) {
 	for {
 		msgType, msg, err := player.conn.ReadMessage()
 		if err != nil {
-			log.Printf("Fehler beim Lesen von Spieler %s: %v\n", player.id, err)
-			// Remove the player from the session when an error occurs.
+			log.Printf("Error while reading player %s: %v\n", player.id, err)
 			session.RemovePlayer(player.id)
 			return
 		}
