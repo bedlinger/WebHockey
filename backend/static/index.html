@@ -54,6 +54,9 @@
         } else if (state.type === 'player_left') {
           alert(state.message);
           leaveGame();
+        } else if (state.type === 'game_over') {
+          alert(`Game Over! ${state.winner} wins! Final score: ${state.scoreA} - ${state.scoreB}`);
+          leaveGame();
         }
       };
 
@@ -76,6 +79,8 @@
         ws = null;
       }
       document.getElementById('leaveButton').style.display = 'none';
+      document.getElementById('sessionId').value = '';
+      clearCanvas();
       ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
 

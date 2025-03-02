@@ -121,7 +121,37 @@ func (s *Session) update() {
 
 	// check if the game is over
 	if s.state.ScoreA == 5 || s.state.ScoreB == 5 {
+		s.notifyGameOver()
 		s.done <- true
+	}
+}
+
+func (s *Session) notifyGameOver() {
+	winner := "Player A"
+	if s.state.ScoreB > s.state.ScoreA {
+		winner = "Player B"
+	}
+
+	msg := struct {
+		MsgType string `json:"type"`
+		Message string `json:"message"`
+		Winner  string `json:"winner"`
+		ScoreA  int    `json:"scoreA"`
+		ScoreB  int    `json:"scoreB"`
+	}{
+		MsgType: "game_over",
+		Message: "Game Over!",
+		Winner:  winner,
+		ScoreA:  s.state.ScoreA,
+		ScoreB:  s.state.ScoreB,
+	}
+
+	data, _ := json.Marshal(msg)
+	if s.state.PlayerA != nil {
+		s.state.PlayerA.Conn.WriteMessage(websocket.TextMessage, data)
+	}
+	if s.state.PlayerB != nil {
+		s.state.PlayerB.Conn.WriteMessage(websocket.TextMessage, data)
 	}
 }
 
