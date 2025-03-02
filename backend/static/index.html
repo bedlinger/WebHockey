@@ -34,7 +34,7 @@
       const response = await fetch('/create', { method: 'POST' });
       const data = await response.json();
       document.getElementById('sessionId').value = data.sessionID;
-      connectWebSocket(data.sessionID);
+      // connectWebSocket(data.sessionID);
     }
 
     function joinGame() {
