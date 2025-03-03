@@ -7,6 +7,9 @@
     canvas {
       border: 1px solid black;
       background: #fff;
+      max-width: 100%;
+      /* Make canvas responsive */
+      height: auto;
     }
 
     #gameControls {
@@ -30,6 +33,12 @@
     let ctx = canvas.getContext('2d');
     let mouseX = 0;
     let mouseY = 0;
+
+    // Game dimensions
+    let fieldWidth = 800;
+    let fieldHeight = 400;
+    let goalWidth = 60;
+    let goalHeight = 120;
 
     async function createGame() {
       const response = await fetch('/create', { method: 'POST' });
@@ -71,13 +80,21 @@
         } else if (state.type === 'game_over') {
           alert(`Game Over! ${state.winner} wins! Final score: ${state.scoreA} - ${state.scoreB}`);
           leaveGame();
+        } else if (state.type === 'init_dimensions') {
+          // Handle initial dimensions
+          updateGameDimensions(state);
         }
       };
 
       canvas.addEventListener('mousemove', function (event) {
         const rect = canvas.getBoundingClientRect();
-        mouseX = event.clientX - rect.left;
-        mouseY = event.clientY - rect.top;
+
+        // Calculate position considering potential canvas scaling
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+
+        mouseX = (event.clientX - rect.left) * scaleX;
+        mouseY = (event.clientY - rect.top) * scaleY;
 
         ws.send(JSON.stringify({
           type: 'player_move',
@@ -85,6 +102,21 @@
           y: mouseY
         }));
       });
+    }
+
+    function updateGameDimensions(dimensions) {
+      // Update our local dimensions
+      fieldWidth = dimensions.fieldWidth;
+      fieldHeight = dimensions.fieldHeight;
+      goalWidth = dimensions.goalWidth;
+      goalHeight = dimensions.goalHeight;
+
+      // Update canvas dimensions
+      canvas.width = fieldWidth;
+      canvas.height = fieldHeight;
+
+      // Clear canvas with new dimensions
+      clearCanvas();
     }
 
     function leaveGame() {
@@ -98,15 +130,27 @@
       ctx.clearRect(0, 0, canvas.width, canvas.height);
     }
 
+    function clearCanvas() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
     function drawGame(state) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Update dimensions if they've changed
+      if (state.fieldWidth && (fieldWidth !== state.fieldWidth || fieldHeight !== state.fieldHeight)) {
+        fieldWidth = state.fieldWidth;
+        fieldHeight = state.fieldHeight;
+        goalWidth = state.goalWidth;
+        goalHeight = state.goalHeight;
+      }
 
       // Draw goals
       ctx.fillStyle = '#eee';
       // Left goal
-      ctx.fillRect(0, (state.fieldHeight - state.goalHeight) / 2, state.goalWidth, state.goalHeight);
+      ctx.fillRect(0, (fieldHeight - goalHeight) / 2, goalWidth, goalHeight);
       // Right goal
-      ctx.fillRect(state.fieldWidth - state.goalWidth, (state.fieldHeight - state.goalHeight) / 2, state.goalWidth, state.goalHeight);
+      ctx.fillRect(fieldWidth - goalWidth, (fieldHeight - goalHeight) / 2, goalWidth, goalHeight);
 
       // Draw players
       ctx.fillStyle = 'blue';
@@ -128,7 +172,7 @@
       // Draw score
       ctx.fillStyle = 'black';
       ctx.font = '24px Arial';
-      ctx.fillText(`${state.scoreA} - ${state.scoreB}`, state.fieldWidth / 2 - 30, 30);
+      ctx.fillText(`${state.scoreA} - ${state.scoreB}`, fieldWidth / 2 - 30, 30);
     }
   </script>
 </body>

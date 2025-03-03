@@ -75,6 +75,9 @@ func handlePlay(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Printf("Player %s joined session %s\n", playerID, sessionID)
 
+	// Send initial dimensions to the player
+	session.SendInitialDimensions(player)
+
 	go listenToPlayer(session, player)
 }
 

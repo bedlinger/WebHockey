@@ -306,3 +306,28 @@ func (s *Session) RemovePlayer(playerID string) {
 		s.state.PlayerB.Conn.WriteMessage(websocket.TextMessage, data)
 	}
 }
+
+// SendInitialDimensions sends the relative game dimensions to the newly connected player
+func (s *Session) SendInitialDimensions(player *Player) {
+	msg := struct {
+		MsgType     string  `json:"type"`
+		FieldWidth  float64 `json:"fieldWidth"`
+		FieldHeight float64 `json:"fieldHeight"`
+		GoalWidth   float64 `json:"goalWidth"`
+		GoalHeight  float64 `json:"goalHeight"`
+	}{
+		MsgType:     "init_dimensions",
+		FieldWidth:  s.state.Width,
+		FieldHeight: s.state.Height,
+		GoalWidth:   s.state.GoalWidth,
+		GoalHeight:  s.state.GoalHeight,
+	}
+
+	data, err := json.Marshal(msg)
+	if err != nil {
+		fmt.Printf("Error marshalling initial dimensions message: %s", err)
+		return
+	}
+
+	_ = player.Conn.WriteMessage(websocket.TextMessage, data)
+}
