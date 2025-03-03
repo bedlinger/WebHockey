@@ -4,28 +4,71 @@
 <head>
   <title>WebHockey</title>
   <style>
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
+
+    .game-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      max-width: 100%;
+      width: 800px;
+    }
+
     canvas {
       border: 1px solid black;
       background: #fff;
       max-width: 100%;
-      /* Make canvas responsive */
       height: auto;
     }
 
     #gameControls {
       margin: 20px 0;
+      text-align: center;
+      width: 100%;
+    }
+
+    #scoreDisplay {
+      font-size: 24px;
+      font-weight: bold;
+      margin: 10px 0;
+      text-align: center;
+    }
+
+    .blue-score {
+      color: blue;
+      margin-right: 10px;
+    }
+
+    .red-score {
+      color: red;
+      margin-left: 10px;
     }
   </style>
 </head>
 
 <body>
-  <div id="gameControls">
-    <button onclick="createGame()" id="createButton">Create New Game</button>
-    <input type="text" id="sessionId" placeholder="Session ID">
-    <button onclick="joinGame()" id="joinButton">Join Game</button>
-    <button onclick="leaveGame()" id="leaveButton" style="display: none;">Leave Game</button>
+  <div class="game-container">
+    <div id="gameControls">
+      <button onclick="createGame()" id="createButton">Create New Game</button>
+      <input type="text" id="sessionId" placeholder="Session ID">
+      <button onclick="joinGame()" id="joinButton">Join Game</button>
+      <button onclick="leaveGame()" id="leaveButton" style="display: none;">Leave Game</button>
+    </div>
+    <div id="scoreDisplay">
+      <span class="blue-score">Player A: 0</span> - <span class="red-score">Player B: 0</span>
+    </div>
+    <div id="playerInfo" style="text-align: center; margin-bottom: 10px; display: none;">
+      You are <span id="playerRole"></span>
+    </div>
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
   </div>
-  <canvas id="gameCanvas" width="800" height="400"></canvas>
 
   <script>
     let ws;
@@ -33,6 +76,7 @@
     let ctx = canvas.getContext('2d');
     let mouseX = 0;
     let mouseY = 0;
+    let playerRole = null; // 'A' or 'B'
 
     // Game dimensions
     let fieldWidth = 800;
@@ -44,7 +88,6 @@
       const response = await fetch('/create', { method: 'POST' });
       const data = await response.json();
       document.getElementById('sessionId').value = data.sessionID;
-      // connectWebSocket(data.sessionID);
     }
 
     function joinGame() {
@@ -64,6 +107,8 @@
       document.getElementById('joinButton').disabled = false;
       document.getElementById('sessionId').disabled = false;
       document.getElementById('leaveButton').style.display = 'none';
+      document.getElementById('playerInfo').style.display = 'none';
+      playerRole = null;
     }
 
     function connectWebSocket(sessionId) {
@@ -74,6 +119,7 @@
         const state = JSON.parse(event.data);
         if (state.type === 'state_update') {
           drawGame(state);
+          updateScore(state.scoreA, state.scoreB);
         } else if (state.type === 'player_left') {
           alert(state.message);
           leaveGame();
@@ -104,6 +150,11 @@
       });
     }
 
+    function updateScore(scoreA, scoreB) {
+      const scoreDisplay = document.getElementById('scoreDisplay');
+      scoreDisplay.innerHTML = `<span class="blue-score">Player A: ${scoreA}</span> - <span class="red-score">Player B: ${scoreB}</span>`;
+    }
+
     function updateGameDimensions(dimensions) {
       // Update our local dimensions
       fieldWidth = dimensions.fieldWidth;
@@ -128,6 +179,7 @@
       document.getElementById('sessionId').value = '';
       clearCanvas();
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      updateScore(0, 0);
     }
 
     function clearCanvas() {
@@ -137,13 +189,39 @@
     function drawGame(state) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Update dimensions if they've changed
       if (state.fieldWidth && (fieldWidth !== state.fieldWidth || fieldHeight !== state.fieldHeight)) {
         fieldWidth = state.fieldWidth;
         fieldHeight = state.fieldHeight;
         goalWidth = state.goalWidth;
         goalHeight = state.goalHeight;
       }
+
+      // Draw the field with colored halves
+      // Left half (Player A's side)
+      ctx.fillStyle = 'rgba(180, 220, 255, 0.2)'; // Light blue
+      ctx.fillRect(0, 0, fieldWidth / 2, fieldHeight);
+
+      // Right half (Player B's side)
+      ctx.fillStyle = 'rgba(255, 180, 180, 0.2)'; // Light red
+      ctx.fillRect(fieldWidth / 2, 0, fieldWidth / 2, fieldHeight);
+
+      // Draw field division line
+      ctx.strokeStyle = '#888';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath();
+      ctx.moveTo(fieldWidth / 2, 0);
+      ctx.lineTo(fieldWidth / 2, fieldHeight);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Label the sides
+      ctx.font = '16px Arial';
+      ctx.fillStyle = 'rgba(0, 0, 100, 0.7)';
+      ctx.fillText("Player A Side", 20, 30);
+
+      ctx.fillStyle = 'rgba(100, 0, 0, 0.7)';
+      ctx.fillText("Player B Side", fieldWidth - 120, 30);
 
       // Draw goals
       ctx.fillStyle = '#eee';
@@ -157,22 +235,37 @@
       ctx.beginPath();
       ctx.arc(state.playerAX, state.playerAY, 20, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = 'black';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Add player identifier
+      ctx.font = '14px Arial';
+      ctx.fillStyle = 'white';
+      ctx.textAlign = 'center';
+      ctx.fillText("A", state.playerAX, state.playerAY + 5);
+      ctx.textAlign = 'start';
 
       ctx.fillStyle = 'red';
       ctx.beginPath();
       ctx.arc(state.playerBX, state.playerBY, 20, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = 'black';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Add player identifier
+      ctx.font = '14px Arial';
+      ctx.fillStyle = 'white';
+      ctx.textAlign = 'center';
+      ctx.fillText("B", state.playerBX, state.playerBY + 5);
+      ctx.textAlign = 'start';
 
       // Draw puck
       ctx.fillStyle = 'black';
       ctx.beginPath();
       ctx.arc(state.puckX, state.puckY, 10, 0, Math.PI * 2);
       ctx.fill();
-
-      // Draw score
-      ctx.fillStyle = 'black';
-      ctx.font = '24px Arial';
-      ctx.fillText(`${state.scoreA} - ${state.scoreB}`, fieldWidth / 2 - 30, 30);
     }
   </script>
 </body>

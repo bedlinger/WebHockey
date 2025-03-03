@@ -178,7 +178,7 @@ func (s *Session) handlePlayerPuckCollision(player *Player) {
 		s.state.VelX = nx * speedFactor
 		s.state.VelY = ny * speedFactor
 
-		maxSpeed := 15.0 // Adjust this value to control maximum puck speed
+		maxSpeed := 30.0 // Adjust this value to control maximum puck speed
 		currentSpeed := math.Sqrt(s.state.VelX*s.state.VelX + s.state.VelY*s.state.VelY)
 		if currentSpeed > maxSpeed {
 			ratio := maxSpeed / currentSpeed
@@ -266,11 +266,25 @@ func (s *Session) HandleInput(playerID string, msg []byte) {
 	if input.MsgType == "player_move" {
 		switch playerID {
 		case s.state.PlayerA.ID:
-			s.state.PlayerA.PosX = input.X
-			s.state.PlayerA.PosY = input.Y
+			// Player A is restricted to the left half of the field
+			if input.X <= s.state.Width/2 {
+				s.state.PlayerA.PosX = input.X
+				s.state.PlayerA.PosY = input.Y
+			} else {
+				// If player tries to move beyond their half, restrict to the halfway line
+				s.state.PlayerA.PosX = s.state.Width / 2
+				s.state.PlayerA.PosY = input.Y
+			}
 		case s.state.PlayerB.ID:
-			s.state.PlayerB.PosX = input.X
-			s.state.PlayerB.PosY = input.Y
+			// Player B is restricted to the right half of the field
+			if input.X >= s.state.Width/2 {
+				s.state.PlayerB.PosX = input.X
+				s.state.PlayerB.PosY = input.Y
+			} else {
+				// If player tries to move beyond their half, restrict to the halfway line
+				s.state.PlayerB.PosX = s.state.Width / 2
+				s.state.PlayerB.PosY = input.Y
+			}
 		}
 	}
 }
