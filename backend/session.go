@@ -1,3 +1,5 @@
+// Package main implements a WebSocket-based hockey game server.
+// It manages game sessions, player connections, and game state.
 package main
 
 import (
@@ -10,41 +12,43 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// Player represents a connected client
+// Player represents a connected client in the game.
 type Player struct {
-	ID   string
-	Conn *websocket.Conn
-	PosX float64
-	PosY float64
+	ID   string          // Unique identifier for the player
+	Conn *websocket.Conn // WebSocket connection to the client
+	PosX float64         // X position of the player on the field
+	PosY float64         // Y position of the player on the field
 }
 
-// State contains the current game state
+// State contains the current game state including field dimensions,
+// puck position, velocities, and player scores.
 type State struct {
-	Width      float64
-	Height     float64
-	GoalWidth  float64
-	GoalHeight float64
+	Width      float64 // Width of the playing field
+	Height     float64 // Height of the playing field
+	GoalWidth  float64 // Width of the goal
+	GoalHeight float64 // Height of the goal
 
-	PuckX float64
-	PuckY float64
-	VelX  float64
-	VelY  float64
+	PuckX float64 // X position of the puck
+	PuckY float64 // Y position of the puck
+	VelX  float64 // X velocity of the puck
+	VelY  float64 // Y velocity of the puck
 
-	ScoreA int
-	ScoreB int
+	ScoreA int // Score of player A
+	ScoreB int // Score of player B
 
-	PlayerA *Player
-	PlayerB *Player
+	PlayerA *Player // First player
+	PlayerB *Player // Second player
 }
 
-// Session manages a single game instance
+// Session manages a single game instance between two players.
 type Session struct {
-	ID     string
-	state  *State
-	ticker *time.Ticker
-	done   chan bool
+	ID     string       // Unique identifier for the session
+	state  *State       // Current game state
+	ticker *time.Ticker // Game loop ticker
+	done   chan bool    // Channel to signal session termination
 }
 
+// NewSession creates and initializes a new game session with the specified ID.
 func NewSession(id string) *Session {
 	return &Session{
 		ID: id,
@@ -58,19 +62,19 @@ func NewSession(id string) *Session {
 			VelX:       0,
 			VelY:       0,
 		},
-		ticker: time.NewTicker(16 * time.Millisecond),
+		ticker: time.NewTicker(16 * time.Millisecond), // ~60 FPS
 		done:   make(chan bool),
 	}
 }
 
-// Start begins the game loop
+// Start begins the game loop that updates state and broadcasts to players.
 func (s *Session) Start() {
 	go func() {
 		for {
 			select {
 			case <-s.done:
 				s.ticker.Stop()
-				fmt.Printf("Game session stopped: %s", s.ID)
+				fmt.Printf("Game session stopped: %s\n", s.ID)
 				return
 			case <-s.ticker.C:
 				s.update()
@@ -80,6 +84,8 @@ func (s *Session) Start() {
 	}()
 }
 
+// update processes one step of game physics including puck movement,
+// collisions, goals, and game end conditions.
 func (s *Session) update() {
 	// If both players are present and puck is stationary, start movement
 	if s.state.PlayerA != nil && s.state.PlayerB != nil &&
@@ -90,6 +96,7 @@ func (s *Session) update() {
 	s.state.PuckX += s.state.VelX
 	s.state.PuckY += s.state.VelY
 
+	// Handle player-puck collisions
 	if s.state.PlayerA != nil {
 		s.handlePlayerPuckCollision(s.state.PlayerA)
 	}
@@ -125,13 +132,15 @@ func (s *Session) update() {
 		}
 	}
 
-	// check if the game is over
+	// Check if the game is over
 	if s.state.ScoreA == 20 || s.state.ScoreB == 20 {
 		s.notifyGameOver()
 		s.done <- true
 	}
 }
 
+// notifyGameOver sends a game over message to all connected players
+// including the final scores and winner.
 func (s *Session) notifyGameOver() {
 	winner := "Player A"
 	if s.state.ScoreB > s.state.ScoreA {
@@ -152,33 +161,51 @@ func (s *Session) notifyGameOver() {
 		ScoreB:  s.state.ScoreB,
 	}
 
-	data, _ := json.Marshal(msg)
+	data, err := json.Marshal(msg)
+	if err != nil {
+		fmt.Printf("Error marshalling game over message: %s\n", err)
+		return
+	}
+
 	if s.state.PlayerA != nil {
-		s.state.PlayerA.Conn.WriteMessage(websocket.TextMessage, data)
+		if err := s.state.PlayerA.Conn.WriteMessage(websocket.TextMessage, data); err != nil {
+			fmt.Printf("Error sending game over to Player A: %s\n", err)
+		}
 	}
 	if s.state.PlayerB != nil {
-		s.state.PlayerB.Conn.WriteMessage(websocket.TextMessage, data)
+		if err := s.state.PlayerB.Conn.WriteMessage(websocket.TextMessage, data); err != nil {
+			fmt.Printf("Error sending game over to Player B: %s\n", err)
+		}
 	}
 }
 
+// handlePlayerPuckCollision calculates and applies physics when a player
+// collides with the puck.
 func (s *Session) handlePlayerPuckCollision(player *Player) {
+	const (
+		collisionRadius = 30.0 // Combined radius of player and puck
+		speedFactor     = 10.0 // Controls bounce strength
+		maxSpeed        = 30.0 // Maximum puck speed
+	)
+
 	dx := s.state.PuckX - player.PosX
 	dy := s.state.PuckY - player.PosY
 	distance := math.Sqrt(dx*dx + dy*dy)
 
-	if distance < 30 { // 20 + 10 = combined radii
+	if distance < collisionRadius {
 		// Normalize collision vector
 		nx := dx / distance
 		ny := dy / distance
 
-		s.state.PuckX = player.PosX + (30 * nx)
-		s.state.PuckY = player.PosY + (30 * ny)
+		// Reposition puck to avoid overlap
+		s.state.PuckX = player.PosX + (collisionRadius * nx)
+		s.state.PuckY = player.PosY + (collisionRadius * ny)
 
-		speedFactor := 10.0 // Adjust this value to control bounce strength
+		// Apply velocity based on collision direction
 		s.state.VelX = nx * speedFactor
 		s.state.VelY = ny * speedFactor
 
-		maxSpeed := 30.0 // Adjust this value to control maximum puck speed
+		// Limit puck speed
 		currentSpeed := math.Sqrt(s.state.VelX*s.state.VelX + s.state.VelY*s.state.VelY)
 		if currentSpeed > maxSpeed {
 			ratio := maxSpeed / currentSpeed
@@ -188,6 +215,8 @@ func (s *Session) handlePlayerPuckCollision(player *Player) {
 	}
 }
 
+// resetPuck positions the puck in the center of the field
+// and gives it a random initial velocity.
 func (s *Session) resetPuck() {
 	s.state.PuckX = s.state.Width / 2
 	s.state.PuckY = s.state.Height / 2
@@ -198,13 +227,14 @@ func (s *Session) resetPuck() {
 	s.state.VelY = speed * float64(1-2*rand.Intn(2)) // Random direction
 }
 
-// Add this new method to start puck movement
+// startPuckMovement initializes puck movement if it's currently stationary.
 func (s *Session) startPuckMovement() {
 	if s.state.VelX == 0 && s.state.VelY == 0 {
 		s.resetPuck()
 	}
 }
 
+// broadcast sends the current game state to all connected players.
 func (s *Session) broadcast() {
 	if s.state.PlayerA == nil || s.state.PlayerB == nil {
 		return
@@ -242,14 +272,20 @@ func (s *Session) broadcast() {
 
 	data, err := json.Marshal(msg)
 	if err != nil {
-		fmt.Printf("Error marshalling state update message: %s", err)
+		fmt.Printf("Error marshalling state update message: %s\n", err)
 		return
 	}
 
-	_ = s.state.PlayerA.Conn.WriteMessage(websocket.TextMessage, data)
-	_ = s.state.PlayerB.Conn.WriteMessage(websocket.TextMessage, data)
+	if err := s.state.PlayerA.Conn.WriteMessage(websocket.TextMessage, data); err != nil {
+		fmt.Printf("Error sending state to Player A: %s\n", err)
+	}
+
+	if err := s.state.PlayerB.Conn.WriteMessage(websocket.TextMessage, data); err != nil {
+		fmt.Printf("Error sending state to Player B: %s\n", err)
+	}
 }
 
+// HandleInput processes player movement commands from clients.
 func (s *Session) HandleInput(playerID string, msg []byte) {
 	var input struct {
 		MsgType string  `json:"type"`
@@ -259,7 +295,7 @@ func (s *Session) HandleInput(playerID string, msg []byte) {
 
 	err := json.Unmarshal(msg, &input)
 	if err != nil {
-		fmt.Printf("Error unmarshalling player input: %s", err)
+		fmt.Printf("Error unmarshalling player input: %s\n", err)
 		return
 	}
 
@@ -289,16 +325,21 @@ func (s *Session) HandleInput(playerID string, msg []byte) {
 	}
 }
 
+// RemovePlayer handles disconnection of a player from the session
+// and notifies the remaining player.
 func (s *Session) RemovePlayer(playerID string) {
 	if s.state.PlayerA != nil && s.state.PlayerA.ID == playerID {
 		s.state.PlayerA = nil
+		fmt.Printf("Player A (ID: %s) removed from session %s\n", playerID, s.ID)
 	}
 	if s.state.PlayerB != nil && s.state.PlayerB.ID == playerID {
 		s.state.PlayerB = nil
+		fmt.Printf("Player B (ID: %s) removed from session %s\n", playerID, s.ID)
 	}
 
 	// Check if both players are gone
 	if s.state.PlayerA == nil && s.state.PlayerB == nil {
+		fmt.Printf("All players left session %s. Terminating session.\n", s.ID)
 		s.done <- true
 		return
 	}
@@ -312,16 +353,25 @@ func (s *Session) RemovePlayer(playerID string) {
 		Message: "Other player has left the game",
 	}
 
-	data, _ := json.Marshal(msg)
+	data, err := json.Marshal(msg)
+	if err != nil {
+		fmt.Printf("Error marshalling player left message: %s\n", err)
+		return
+	}
+
 	if s.state.PlayerA != nil {
-		s.state.PlayerA.Conn.WriteMessage(websocket.TextMessage, data)
+		if err := s.state.PlayerA.Conn.WriteMessage(websocket.TextMessage, data); err != nil {
+			fmt.Printf("Error notifying Player A of disconnect: %s\n", err)
+		}
 	}
 	if s.state.PlayerB != nil {
-		s.state.PlayerB.Conn.WriteMessage(websocket.TextMessage, data)
+		if err := s.state.PlayerB.Conn.WriteMessage(websocket.TextMessage, data); err != nil {
+			fmt.Printf("Error notifying Player B of disconnect: %s\n", err)
+		}
 	}
 }
 
-// SendInitialDimensions sends the relative game dimensions to the newly connected player
+// SendInitialDimensions sends the game dimensions to a newly connected player.
 func (s *Session) SendInitialDimensions(player *Player) {
 	msg := struct {
 		MsgType     string  `json:"type"`
@@ -339,9 +389,11 @@ func (s *Session) SendInitialDimensions(player *Player) {
 
 	data, err := json.Marshal(msg)
 	if err != nil {
-		fmt.Printf("Error marshalling initial dimensions message: %s", err)
+		fmt.Printf("Error marshalling initial dimensions message: %s\n", err)
 		return
 	}
 
-	_ = player.Conn.WriteMessage(websocket.TextMessage, data)
+	if err := player.Conn.WriteMessage(websocket.TextMessage, data); err != nil {
+		fmt.Printf("Error sending initial dimensions to player: %s\n", err)
+	}
 }
