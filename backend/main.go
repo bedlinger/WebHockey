@@ -22,7 +22,7 @@ func main() {
 	r.HandleFunc("/play/{sessionID}", handlePlay)
 
 	fmt.Println("Server running on :8080 ...")
-	log.Fatal(http.ListenAndServe(":8080", r))
+	log.Fatal(http.ListenAndServe("0.0.0.0:8080", r))
 }
 
 func handleCreate(w http.ResponseWriter, r *http.Request) {
