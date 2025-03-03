@@ -55,8 +55,8 @@ func NewSession(id string) *Session {
 			GoalHeight: 120,
 			PuckX:      400,
 			PuckY:      200,
-			VelX:       5,
-			VelY:       5,
+			VelX:       0,
+			VelY:       0,
 		},
 		ticker: time.NewTicker(16 * time.Millisecond),
 		done:   make(chan bool),
@@ -81,6 +81,12 @@ func (s *Session) Start() {
 }
 
 func (s *Session) update() {
+	// If both players are present and puck is stationary, start movement
+	if s.state.PlayerA != nil && s.state.PlayerB != nil &&
+		s.state.VelX == 0 && s.state.VelY == 0 {
+		s.startPuckMovement()
+	}
+
 	s.state.PuckX += s.state.VelX
 	s.state.PuckY += s.state.VelY
 
@@ -120,7 +126,7 @@ func (s *Session) update() {
 	}
 
 	// check if the game is over
-	if s.state.ScoreA == 5 || s.state.ScoreB == 5 {
+	if s.state.ScoreA == 20 || s.state.ScoreB == 20 {
 		s.notifyGameOver()
 		s.done <- true
 	}
@@ -185,8 +191,18 @@ func (s *Session) handlePlayerPuckCollision(player *Player) {
 func (s *Session) resetPuck() {
 	s.state.PuckX = s.state.Width / 2
 	s.state.PuckY = s.state.Height / 2
-	s.state.VelX = 5 * float64(1-2*rand.Intn(2)) // Random direction
-	s.state.VelY = 5 * float64(1-2*rand.Intn(2)) // Random direction
+
+	// Give the puck a random initial velocity
+	speed := 5.0
+	s.state.VelX = speed * float64(1-2*rand.Intn(2)) // Random direction
+	s.state.VelY = speed * float64(1-2*rand.Intn(2)) // Random direction
+}
+
+// Add this new method to start puck movement
+func (s *Session) startPuckMovement() {
+	if s.state.VelX == 0 && s.state.VelY == 0 {
+		s.resetPuck()
+	}
 }
 
 func (s *Session) broadcast() {
