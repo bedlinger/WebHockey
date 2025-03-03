@@ -17,9 +17,9 @@
 
 <body>
   <div id="gameControls">
-    <button onclick="createGame()">Create New Game</button>
+    <button onclick="createGame()" id="createButton">Create New Game</button>
     <input type="text" id="sessionId" placeholder="Session ID">
-    <button onclick="joinGame()">Join Game</button>
+    <button onclick="joinGame()" id="joinButton">Join Game</button>
     <button onclick="leaveGame()" id="leaveButton" style="display: none;">Leave Game</button>
   </div>
   <canvas id="gameCanvas" width="800" height="400"></canvas>
@@ -43,9 +43,23 @@
       connectWebSocket(sessionId);
     }
 
+    function disableGameControls() {
+      document.getElementById('createButton').disabled = true;
+      document.getElementById('joinButton').disabled = true;
+      document.getElementById('sessionId').disabled = true;
+      document.getElementById('leaveButton').style.display = 'inline';
+    }
+
+    function enableGameControls() {
+      document.getElementById('createButton').disabled = false;
+      document.getElementById('joinButton').disabled = false;
+      document.getElementById('sessionId').disabled = false;
+      document.getElementById('leaveButton').style.display = 'none';
+    }
+
     function connectWebSocket(sessionId) {
       ws = new WebSocket(`ws://${window.location.host}/play/${sessionId}`);
-      document.getElementById('leaveButton').style.display = 'inline';
+      disableGameControls();
 
       ws.onmessage = function (event) {
         const state = JSON.parse(event.data);
@@ -78,7 +92,7 @@
         ws.close();
         ws = null;
       }
-      document.getElementById('leaveButton').style.display = 'none';
+      enableGameControls();
       document.getElementById('sessionId').value = '';
       clearCanvas();
       ctx.clearRect(0, 0, canvas.width, canvas.height);
