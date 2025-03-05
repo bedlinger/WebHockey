@@ -73,11 +73,26 @@ WebHockey leverages several powerful Go features that distinguish it from implem
 - Go 1.15 or higher
 - Modern web browser with WebSocket support
 
+### Installing Dependencies
+
+```bash
+go get -u github.com/gorilla/websocket
+go get -u github.com/gorilla/mux
+go get -u github.com/google/uuid
+```
+
 ### Running the Server
 
 ```bash
-cd /b:/Projekte/WebHockey/backend
+cd /path/to/WebHockey/backend
 go run .
+```
+
+For a better development experience, you can use `air` to automatically reload the server on code changes:
+
+```bash
+cd /path/to/WebHockey/backend
+air
 ```
 
 The server will start listening on port 8080 (http://localhost:8080).
